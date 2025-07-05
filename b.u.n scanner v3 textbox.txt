@@ -1,0 +1,873 @@
+-- Advanced Backdoor Scanner usando Orion Library
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+
+-- Serviços necessários
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local Workspace = game:GetService("Workspace")
+local StarterPack = game:GetService("StarterPack")
+local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
+
+-- Configurações
+local SCAN_INTERVAL = 3
+local MAX_SCRIPT_SIZE = 50000 -- Limite de tamanho para análise completa
+
+-- Variáveis globais
+local isScanning = false
+local scanResults = {}
+local totalVulnerabilities = 0
+local scanProgress = 0
+local maxProgress = 100
+
+-- Padrões de backdoor conhecidos
+local BACKDOOR_PATTERNS = {
+    -- Padrões de execução remota
+    "loadstring%(.*HttpService",
+    "loadstring%(.*http",
+    "loadstring%(.*GET",
+    "loadstring%(.*POST",
+    "require%(.*%d+%)",
+    "require%(%d+%)",
+    
+    -- Padrões de modelos infectados
+    "lalol",
+    "Lalol",
+    "LALOL",
+    "Model%.Touched",
+    "ChildAdded.*loadstring",
+    "ChildAdded.*require",
+    "GetChildren.*require",
+    "GetDescendants.*require",
+    
+    -- Padrões de Remote Events suspeitos
+    "RemoteEvent.*FireServer",
+    "RemoteFunction.*InvokeServer",
+    "BindableEvent.*Fire",
+    "BindableFunction.*Invoke",
+    
+    -- Padrões de bypass de segurança
+    "getfenv",
+    "setfenv",
+    "getrawmetatable",
+    "setrawmetatable",
+    "debug%.getupvalue",
+    "debug%.setupvalue",
+    "debug%.getregistry",
+    
+    -- Padrões de obfuscação
+    "\\x%x%x",
+    "\\%d%d%d",
+    "string%.char%(.*%)",
+    "string%.byte%(.*%)",
+    
+    -- Padrões de backdoor específicos
+    "ban%-appeals",
+    "HttpGet.*pastebin",
+    "HttpGet.*github",
+    "HttpGet.*discord",
+    "HttpGet.*raw%.githubusercontent",
+    
+    -- Padrões de keylogger
+    "UserInputService%.InputBegan",
+    "UserInputService%.InputChanged",
+    "Mouse%.KeyDown",
+    "Mouse%.KeyUp",
+    
+    -- Padrões de roubo de dados
+    "MarketplaceService:GetProductInfo",
+    "Players%.LocalPlayer%.UserId",
+    "Players%.LocalPlayer%.Name",
+    "game%.Players%.LocalPlayer%.AccountAge"
+}
+
+-- Nomes suspeitos de objetos
+local SUSPICIOUS_NAMES = {
+    "Backdoor", "backdoor", "BACKDOOR",
+    "Virus", "virus", "VIRUS",
+    "Hack", "hack", "HACK",
+    "Exploit", "exploit", "EXPLOIT",
+    "Lalol", "lalol", "LALOL",
+    "Remote", "remote", "REMOTE",
+    "Hidden", "hidden", "HIDDEN",
+    "Invisible", "invisible", "INVISIBLE",
+    "Script", "script", "SCRIPT",
+    "LocalScript", "localscript", "LOCALSCRIPT",
+    "Model", "model", "MODEL"
+}
+
+-- Criar janela principal
+local Window = OrionLib:MakeWindow({
+    Name = "Advanced Backdoor Scanner",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "AdvancedBackdoorScanner"
+})
+
+-- Abas
+local MainTab = Window:MakeTab({
+    Name = "Scanner Principal",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+local ResultsTab = Window:MakeTab({
+    Name = "Resultados",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+local DetailsTab = Window:MakeTab({
+    Name = "Detalhes",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+local ConfigTab = Window:MakeTab({
+    Name = "Configurações",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+-- Seções
+local ControlSection = MainTab:AddSection({Name = "Controles"})
+local InfoSection = MainTab:AddSection({Name = "Informações"})
+local ProgressSection = MainTab:AddSection({Name = "Progresso"})
+local ResultsSection = ResultsTab:AddSection({Name = "Vulnerabilidades Encontradas"})
+local DetailsSection = DetailsTab:AddSection({Name = "Análise Detalhada"})
+local ConfigSection = ConfigTab:AddSection({Name = "Configurações de Scan"})
+
+-- Labels
+local StatusLabel = InfoSection:AddLabel("Status: Aguardando...")
+local VulnCountLabel = InfoSection:AddLabel("Vulnerabilidades: 0")
+local LastScanLabel = InfoSection:AddLabel("Último Scan: Nunca")
+local ProgressLabel = ProgressSection:AddLabel("Progresso: 0%")
+local CurrentActionLabel = ProgressSection:AddLabel("Ação: Aguardando...")
+
+-- Configurações
+local scanSettings = {
+    deepScan = true,
+    scanWorkspace = true,
+    scanReplicatedStorage = true,
+    scanServerStorage = true,
+    scanStarterPack = true,
+    scanStarterGui = true,
+    scanLighting = true,
+    scanSoundService = true,
+    scanModels = true,
+    scanScripts = true,
+    scanRemoteEvents = true,
+    checkSuspiciousNames = true,
+    checkLargeScripts = true,
+    maxScriptSize = MAX_SCRIPT_SIZE
+}
+
+-- Função para verificar padrões de backdoor
+local function checkBackdoorPatterns(source)
+    local vulnerabilities = {}
+    
+    for i, pattern in ipairs(BACKDOOR_PATTERNS) do
+        if string.find(source, pattern) then
+            table.insert(vulnerabilities, {
+                type = "Padrão Suspeito",
+                pattern = pattern,
+                severity = "High"
+            })
+        end
+    end
+    
+    return vulnerabilities
+end
+
+-- Função para verificar nomes suspeitos
+local function checkSuspiciousName(name)
+    for _, suspiciousName in ipairs(SUSPICIOUS_NAMES) do
+        if string.find(name:lower(), suspiciousName:lower()) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Função para analisar um script
+local function analyzeScript(script)
+    local vulnerabilities = {}
+    
+    -- Verificar se é um script válido
+    if not script or not script:IsA("BaseScript") then
+        return vulnerabilities
+    end
+    
+    CurrentActionLabel:Set("Ação: Analisando " .. script.Name)
+    
+    -- Verificar nome suspeito
+    if checkSuspiciousName(script.Name) then
+        table.insert(vulnerabilities, {
+            type = "Nome Suspeito",
+            details = "Script com nome suspeito: " .. script.Name,
+            severity = "Medium",
+            location = script:GetFullName()
+        })
+    end
+    
+    -- Tentar obter o código fonte
+    local success, source = pcall(function()
+        return script.Source or ""
+    end)
+    
+    if success and source and source ~= "" then
+        -- Verificar tamanho do script
+        if #source > scanSettings.maxScriptSize then
+            table.insert(vulnerabilities, {
+                type = "Script Muito Grande",
+                details = "Script com " .. #source .. " caracteres (pode estar obfuscado)",
+                severity = "Medium",
+                location = script:GetFullName()
+            })
+        end
+        
+        -- Verificar padrões de backdoor
+        local patternVulns = checkBackdoorPatterns(source)
+        for _, vuln in ipairs(patternVulns) do
+            vuln.location = script:GetFullName()
+            vuln.details = "Padrão encontrado: " .. vuln.pattern
+            table.insert(vulnerabilities, vuln)
+        end
+        
+        -- Verificar se é um script oculto/desabilitado
+        if not script.Enabled then
+            table.insert(vulnerabilities, {
+                type = "Script Desabilitado",
+                details = "Script desabilitado (pode estar oculto): " .. script.Name,
+                severity = "Low",
+                location = script:GetFullName()
+            })
+        end
+    else
+        -- Script sem acesso ao código fonte (suspeito)
+        table.insert(vulnerabilities, {
+            type = "Script Protegido",
+            details = "Não foi possível acessar o código fonte",
+            severity = "High",
+            location = script:GetFullName()
+        })
+    end
+    
+    return vulnerabilities
+end
+
+-- Função para analisar um modelo
+local function analyzeModel(model)
+    local vulnerabilities = {}
+    
+    if not model or not model:IsA("Model") then
+        return vulnerabilities
+    end
+    
+    CurrentActionLabel:Set("Ação: Analisando modelo " .. model.Name)
+    
+    -- Verificar nome suspeito
+    if checkSuspiciousName(model.Name) then
+        table.insert(vulnerabilities, {
+            type = "Modelo Suspeito",
+            details = "Modelo com nome suspeito: " .. model.Name,
+            severity = "High",
+            location = model:GetFullName()
+        })
+    end
+    
+    -- Verificar se contém scripts
+    local scripts = model:GetDescendants()
+    for _, obj in ipairs(scripts) do
+        if obj:IsA("BaseScript") then
+            table.insert(vulnerabilities, {
+                type = "Modelo com Scripts",
+                details = "Modelo contém scripts: " .. obj.Name,
+                severity = "Medium",
+                location = model:GetFullName()
+            })
+        end
+    end
+    
+    -- Verificar eventos Touched (comum em modelos infectados)
+    local touchedConnections = 0
+    for _, part in ipairs(model:GetChildren()) do
+        if part:IsA("BasePart") then
+            -- Verificar se tem eventos conectados (difícil de detectar diretamente)
+            if part.Touched then
+                touchedConnections = touchedConnections + 1
+            end
+        end
+    end
+    
+    if touchedConnections > 0 then
+        table.insert(vulnerabilities, {
+            type = "Eventos Touched",
+            details = "Modelo pode ter eventos Touched conectados",
+            severity = "Medium",
+            location = model:GetFullName()
+        })
+    end
+    
+    return vulnerabilities
+end
+
+-- Função para analisar Remote Events
+local function analyzeRemoteEvents(service)
+    local vulnerabilities = {}
+    
+    CurrentActionLabel:Set("Ação: Analisando Remote Events")
+    
+    local remotes = service:GetDescendants()
+    for _, obj in ipairs(remotes) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            -- Verificar nome suspeito
+            if checkSuspiciousName(obj.Name) then
+                table.insert(vulnerabilities, {
+                    type = "Remote Event Suspeito",
+                    details = "Remote com nome suspeito: " .. obj.Name,
+                    severity = "High",
+                    location = obj:GetFullName()
+                })
+            end
+            
+            -- Verificar se está oculto ou com propriedades estranhas
+            if obj.Parent and obj.Parent.Name == "nil" then
+                table.insert(vulnerabilities, {
+                    type = "Remote Event Oculto",
+                    details = "Remote em local suspeito: " .. obj.Name,
+                    severity = "High",
+                    location = obj:GetFullName()
+                })
+            end
+        end
+    end
+    
+    return vulnerabilities
+end
+
+-- Função principal de scan
+local function performFullScan()
+    if isScanning then
+        return
+    end
+    
+    isScanning = true
+    scanResults = {}
+    totalVulnerabilities = 0
+    scanProgress = 0
+    maxProgress = 0
+    
+    StatusLabel:Set("Status: 🔍 Escaneando...")
+    
+    -- Calcular progresso máximo
+    local servicesToScan = {}
+    if scanSettings.scanWorkspace then table.insert(servicesToScan, Workspace) end
+    if scanSettings.scanReplicatedStorage then table.insert(servicesToScan, ReplicatedStorage) end
+    if scanSettings.scanServerStorage then table.insert(servicesToScan, ServerStorage) end
+    if scanSettings.scanStarterPack then table.insert(servicesToScan, StarterPack) end
+    if scanSettings.scanStarterGui then table.insert(servicesToScan, StarterGui) end
+    if scanSettings.scanLighting then table.insert(servicesToScan, Lighting) end
+    if scanSettings.scanSoundService then table.insert(servicesToScan, SoundService) end
+    
+    -- Contar objetos para progresso
+    for _, service in ipairs(servicesToScan) do
+        maxProgress = maxProgress + #service:GetDescendants()
+    end
+    
+    -- Escanear cada serviço
+    for _, service in ipairs(servicesToScan) do
+        CurrentActionLabel:Set("Ação: Escaneando " .. service.Name)
+        
+        local objects = service:GetDescendants()
+        for i, obj in ipairs(objects) do
+            scanProgress = scanProgress + 1
+            local progressPercent = math.floor((scanProgress / maxProgress) * 100)
+            ProgressLabel:Set("Progresso: " .. progressPercent .. "%")
+            
+            local vulnerabilities = {}
+            
+            -- Analisar scripts
+            if scanSettings.scanScripts and obj:IsA("BaseScript") then
+                local scriptVulns = analyzeScript(obj)
+                for _, vuln in ipairs(scriptVulns) do
+                    table.insert(vulnerabilities, vuln)
+                end
+            end
+            
+            -- Analisar modelos
+            if scanSettings.scanModels and obj:IsA("Model") then
+                local modelVulns = analyzeModel(obj)
+                for _, vuln in ipairs(modelVulns) do
+                    table.insert(vulnerabilities, vuln)
+                end
+            end
+            
+            -- Adicionar vulnerabilidades encontradas
+            for _, vuln in ipairs(vulnerabilities) do
+                table.insert(scanResults, vuln)
+                totalVulnerabilities = totalVulnerabilities + 1
+            end
+            
+            -- Pequena pausa para não travar o jogo
+            if i % 10 == 0 then
+                wait()
+            end
+        end
+        
+        -- Analisar Remote Events do serviço
+        if scanSettings.scanRemoteEvents then
+            local remoteVulns = analyzeRemoteEvents(service)
+            for _, vuln in ipairs(remoteVulns) do
+                table.insert(scanResults, vuln)
+                totalVulnerabilities = totalVulnerabilities + 1
+            end
+        end
+    end
+    
+    -- Finalizar scan
+    ProgressLabel:Set("Progresso: 100%")
+    CurrentActionLabel:Set("Ação: Scan concluído!")
+    
+    if totalVulnerabilities > 0 then
+        StatusLabel:Set("Status: ⚠️ " .. totalVulnerabilities .. " vulnerabilidades encontradas!")
+        
+        -- Notificação
+        OrionLib:MakeNotification({
+            Name = "Vulnerabilidades Detectadas!",
+            Content = totalVulnerabilities .. " vulnerabilidades foram encontradas no jogo",
+            Image = "rbxassetid://4483345998",
+            Time = 5
+        })
+    else
+        StatusLabel:Set("Status: ✅ Nenhuma vulnerabilidade encontrada")
+        
+        OrionLib:MakeNotification({
+            Name = "Scan Concluído",
+            Content = "Nenhuma vulnerabilidade foi encontrada no jogo",
+            Image = "rbxassetid://4483345998",
+            Time = 3
+        })
+    end
+    
+    VulnCountLabel:Set("Vulnerabilidades: " .. totalVulnerabilities)
+    LastScanLabel:Set("Último Scan: " .. os.date("%H:%M:%S"))
+    
+    -- Atualizar resultados
+    updateResultsDisplay()
+    
+    isScanning = false
+end
+
+-- Função para atualizar exibição de resultados
+function updateResultsDisplay()
+    -- Limpar seção anterior
+    ResultsTab:RemoveSection(ResultsSection)
+    ResultsSection = ResultsTab:AddSection({Name = "Vulnerabilidades Encontradas"})
+    
+    -- Agrupar por tipo
+    local groupedResults = {}
+    for _, vuln in ipairs(scanResults) do
+        if not groupedResults[vuln.type] then
+            groupedResults[vuln.type] = {}
+        end
+        table.insert(groupedResults[vuln.type], vuln)
+    end
+    
+    -- Adicionar resultados agrupados
+    for vulnType, vulns in pairs(groupedResults) do
+        ResultsSection:AddLabel("📋 " .. vulnType .. " (" .. #vulns .. ")")
+        
+        for i, vuln in ipairs(vulns) do
+            if i <= 5 then -- Limitar exibição
+                local severityIcon = vuln.severity == "High" and "🔴" or vuln.severity == "Medium" and "🟡" or "🟢"
+                ResultsSection:AddLabel("   " .. severityIcon .. " " .. vuln.details)
+            end
+        end
+        
+        if #vulns > 5 then
+            ResultsSection:AddLabel("   ... e mais " .. (#vulns - 5) .. " itens")
+        end
+    end
+    
+    -- Botão para limpar resultados
+    ResultsSection:AddButton({
+        Name = "Limpar Resultados",
+        Callback = function()
+            scanResults = {}
+            totalVulnerabilities = 0
+            VulnCountLabel:Set("Vulnerabilidades: 0")
+            updateResultsDisplay()
+        end
+    })
+end
+
+-- Textbox para require ID
+local requireIdInput = ""
+ControlSection:AddTextbox({
+    Name = "ID do Require Suspeito",
+    Default = "",
+    TextDisappear = false,
+    Callback = function(Value)
+        requireIdInput = Value
+    end
+})
+
+-- Textbox para script de exploit
+local exploitScriptInput = ""
+ControlSection:AddTextbox({
+    Name = "Script de Exploit (se backdoor detectado)",
+    Default = 'require(123255432303221):Pload("user")',
+    TextDisappear = false,
+    Callback = function(Value)
+        exploitScriptInput = Value
+    end
+})
+
+-- Função para executar script de exploit
+local function executeExploitScript()
+    if exploitScriptInput == "" then
+        OrionLib:MakeNotification({
+            Name = "Erro",
+            Content = "Por favor, insira um script de exploit",
+            Image = "rbxassetid://4483345998",
+            Time = 3
+        })
+        return
+    end
+    
+    StatusLabel:Set("Status: 🚀 Executando script de exploit...")
+    
+    local success, error = pcall(function()
+        loadstring(exploitScriptInput)()
+    end)
+    
+    if success then
+        StatusLabel:Set("Status: ✅ Script de exploit executado com sucesso!")
+        
+        OrionLib:MakeNotification({
+            Name = "Exploit Executado",
+            Content = "Script de exploit foi executado com sucesso",
+            Image = "rbxassetid://4483345998",
+            Time = 5
+        })
+        
+        -- Log da execução
+        print("=== EXPLOIT EXECUTADO ===")
+        print("Script: " .. exploitScriptInput)
+        print("Horário: " .. os.date("%d/%m/%Y %H:%M:%S"))
+        print("Status: Sucesso")
+    else
+        StatusLabel:Set("Status: ❌ Erro ao executar script de exploit")
+        
+        OrionLib:MakeNotification({
+            Name = "Erro na Execução",
+            Content = "Falha ao executar o script de exploit: " .. tostring(error),
+            Image = "rbxassetid://4483345998",
+            Time = 5
+        })
+        
+        -- Log do erro
+        print("=== ERRO NO EXPLOIT ===")
+        print("Script: " .. exploitScriptInput)
+        print("Erro: " .. tostring(error))
+        print("Horário: " .. os.date("%d/%m/%Y %H:%M:%S"))
+    end
+end
+
+-- Função para verificar require específico
+local function checkSpecificRequire()
+    if requireIdInput == "" then
+        OrionLib:MakeNotification({
+            Name = "Erro",
+            Content = "Por favor, insira um ID de require para verificar",
+            Image = "rbxassetid://4483345998",
+            Time = 3
+        })
+        return
+    end
+    
+    StatusLabel:Set("Status: 🔍 Verificando require(" .. requireIdInput .. ")...")
+    
+    local foundRequire = false
+    local requireLocations = {}
+    
+    -- Procurar em todos os scripts do jogo
+    local allServices = {Workspace, ReplicatedStorage, ServerStorage, StarterPack, StarterGui, Lighting, SoundService}
+    
+    for _, service in ipairs(allServices) do
+        local objects = service:GetDescendants()
+        for _, obj in ipairs(objects) do
+            if obj:IsA("BaseScript") then
+                local success, source = pcall(function()
+                    return obj.Source or ""
+                end)
+                
+                if success and source and source ~= "" then
+                    -- Verificar se contém o require específico
+                    if string.find(source, "require%(" .. requireIdInput .. "%)") or 
+                       string.find(source, "require%(.*" .. requireIdInput .. ".*%)") then
+                        foundRequire = true
+                        table.insert(requireLocations, {
+                            script = obj,
+                            location = obj:GetFullName(),
+                            source = source
+                        })
+                        
+                        -- Adicionar como vulnerabilidade
+                        table.insert(scanResults, {
+                            type = "Require Específico Detectado",
+                            details = "require(" .. requireIdInput .. ") encontrado em: " .. obj.Name,
+                            severity = "High",
+                            location = obj:GetFullName()
+                        })
+                        totalVulnerabilities = totalVulnerabilities + 1
+                    end
+                end
+            end
+        end
+    end
+    
+    if foundRequire then
+        StatusLabel:Set("Status: ⚠️ require(" .. requireIdInput .. ") ENCONTRADO!")
+        VulnCountLabel:Set("Vulnerabilidades: " .. totalVulnerabilities)
+        
+        OrionLib:MakeNotification({
+            Name = "Backdoor Detectado!",
+            Content = "require(" .. requireIdInput .. ") foi encontrado em " .. #requireLocations .. " local(is)",
+            Image = "rbxassetid://4483345998",
+            Time = 5
+        })
+        
+        -- Atualizar display de resultados
+        updateResultsDisplay()
+        
+        -- Mostrar detalhes no console
+        print("=== REQUIRE DETECTADO ===")
+        print("ID: " .. requireIdInput)
+        print("Locais encontrados: " .. #requireLocations)
+        for i, loc in ipairs(requireLocations) do
+            print(i .. ". " .. loc.location)
+        end
+        
+        -- Perguntar se quer executar o script de exploit
+        if exploitScriptInput ~= "" then
+            OrionLib:MakeNotification({
+                Name = "Backdoor Confirmado",
+                Content = "Backdoor detectado! Você pode executar o script de exploit agora.",
+                Image = "rbxassetid://4483345998",
+                Time = 7
+            })
+        end
+    else
+        StatusLabel:Set("Status: ✅ require(" .. requireIdInput .. ") não encontrado")
+        
+        OrionLib:MakeNotification({
+            Name = "Require Não Encontrado",
+            Content = "require(" .. requireIdInput .. ") não foi encontrado no jogo",
+            Image = "rbxassetid://4483345998",
+            Time = 3
+        })
+    end
+end
+
+-- Função para verificar e executar automaticamente
+local function checkAndExecuteIfBackdoor()
+    if requireIdInput == "" then
+        OrionLib:MakeNotification({
+            Name = "Erro",
+            Content = "Por favor, insira um ID de require para verificar",
+            Image = "rbxassetid://4483345998",
+            Time = 3
+        })
+        return
+    end
+    
+    StatusLabel:Set("Status: 🔍 Verificando backdoor e preparando exploit...")
+    
+    -- Primeiro verificar se existe o backdoor
+    local foundRequire = false
+    local allServices = {Workspace, ReplicatedStorage, ServerStorage, StarterPack, StarterGui, Lighting, SoundService}
+    
+    for _, service in ipairs(allServices) do
+        local objects = service:GetDescendants()
+        for _, obj in ipairs(objects) do
+            if obj:IsA("BaseScript") then
+                local success, source = pcall(function()
+                    return obj.Source or ""
+                end)
+                
+                if success and source and source ~= "" then
+                    if string.find(source, "require%(" .. requireIdInput .. "%)") or 
+                       string.find(source, "require%(.*" .. requireIdInput .. ".*%)") then
+                        foundRequire = true
+                        break
+                    end
+                end
+            end
+        end
+        if foundRequire then break end
+    end
+    
+    if foundRequire then
+        StatusLabel:Set("Status: ⚠️ Backdoor detectado! Executando exploit...")
+        
+        -- Aguardar um pouco antes de executar
+        wait(1)
+        
+        -- Executar o script de exploit automaticamente
+        executeExploitScript()
+        
+        -- Adicionar à lista de resultados
+        table.insert(scanResults, {
+            type = "Backdoor Exploitado",
+            details = "Backdoor require(" .. requireIdInput .. ") foi detectado e exploitado",
+            severity = "Critical",
+            location = "Exploit executado automaticamente"
+        })
+        totalVulnerabilities = totalVulnerabilities + 1
+        VulnCountLabel:Set("Vulnerabilidades: " .. totalVulnerabilities)
+        updateResultsDisplay()
+    else
+        StatusLabel:Set("Status: ✅ Nenhum backdoor detectado")
+        
+        OrionLib:MakeNotification({
+            Name = "Jogo Seguro",
+            Content = "Nenhum backdoor foi detectado. O jogo está seguro.",
+            Image = "rbxassetid://4483345998",
+            Time = 3
+        })
+    end
+end
+
+-- Controles
+ControlSection:AddButton({
+    Name = "🔍 Escanear Agora",
+    Callback = function()
+        performFullScan()
+    end
+})
+
+ControlSection:AddButton({
+    Name = "🎯 Verificar Require Específico",
+    Callback = function()
+        checkSpecificRequire()
+    end
+})
+
+ControlSection:AddButton({
+    Name = "🚀 Executar Script de Exploit",
+    Callback = function()
+        executeExploitScript()
+    end
+})
+
+ControlSection:AddButton({
+    Name = "⚡ Verificar e Exploitar Auto",
+    Callback = function()
+        checkAndExecuteIfBackdoor()
+    end
+})
+
+ControlSection:AddButton({
+    Name = "📊 Relatório Detalhado",
+    Callback = function()
+        if #scanResults > 0 then
+            local report = "=== RELATÓRIO DE VULNERABILIDADES ===\n\n"
+            report = report .. "Total de vulnerabilidades: " .. totalVulnerabilities .. "\n"
+            report = report .. "Data do scan: " .. os.date("%d/%m/%Y %H:%M:%S") .. "\n\n"
+            
+            for i, vuln in ipairs(scanResults) do
+                report = report .. i .. ". " .. vuln.type .. " (" .. vuln.severity .. ")\n"
+                report = report .. "   Local: " .. vuln.location .. "\n"
+                report = report .. "   Detalhes: " .. vuln.details .. "\n\n"
+            end
+            
+            -- Salvar relatório (se possível)
+            print(report)
+            
+            OrionLib:MakeNotification({
+                Name = "Relatório Gerado",
+                Content = "Relatório detalhado foi gerado no console",
+                Image = "rbxassetid://4483345998",
+                Time = 3
+            })
+        end
+    end
+})
+
+-- Configurações
+ConfigSection:AddToggle({
+    Name = "Scan Profundo",
+    Default = scanSettings.deepScan,
+    Callback = function(Value)
+        scanSettings.deepScan = Value
+    end
+})
+
+ConfigSection:AddToggle({
+    Name = "Escanear Workspace",
+    Default = scanSettings.scanWorkspace,
+    Callback = function(Value)
+        scanSettings.scanWorkspace = Value
+    end
+})
+
+ConfigSection:AddToggle({
+    Name = "Escanear ReplicatedStorage",
+    Default = scanSettings.scanReplicatedStorage,
+    Callback = function(Value)
+        scanSettings.scanReplicatedStorage = Value
+    end
+})
+
+ConfigSection:AddToggle({
+    Name = "Escanear Modelos",
+    Default = scanSettings.scanModels,
+    Callback = function(Value)
+        scanSettings.scanModels = Value
+    end
+})
+
+ConfigSection:AddToggle({
+    Name = "Escanear Scripts",
+    Default = scanSettings.scanScripts,
+    Callback = function(Value)
+        scanSettings.scanScripts = Value
+    end
+})
+
+ConfigSection:AddToggle({
+    Name = "Escanear Remote Events",
+    Default = scanSettings.scanRemoteEvents,
+    Callback = function(Value)
+        scanSettings.scanRemoteEvents = Value
+    end
+})
+
+ConfigSection:AddSlider({
+    Name = "Tamanho Máximo de Script",
+    Min = 1000,
+    Max = 100000,
+    Default = MAX_SCRIPT_SIZE,
+    Color = Color3.fromRGB(255,255,255),
+    Increment = 1000,
+    ValueName = "chars",
+    Callback = function(Value)
+        scanSettings.maxScriptSize = Value
+    end
+})
+
+-- Inicializar
+OrionLib:MakeNotification({
+    Name = "Advanced Backdoor Scanner",
+    Content = "Scanner avançado de backdoors carregado com sucesso!",
+    Image = "rbxassetid://4483345998",
+    Time = 5
+})
+
+OrionLib:Init()
