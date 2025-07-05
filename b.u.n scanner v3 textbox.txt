@@ -1,6 +1,5 @@
 -- Advanced Backdoor Scanner usando Orion Library
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
-
+local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/VerbalHubz/Verbal-Hub/refs/heads/main/Orion%20Hub%20Ui%20V3'))()
 -- Serviços necessários
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
